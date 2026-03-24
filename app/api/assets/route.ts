@@ -25,8 +25,13 @@ export async function GET(req: NextRequest) {
     })
 
     return NextResponse.json(assets)
-  } catch (error) {
-    return NextResponse.json({ error: '获取资产失败' }, { status: 500 })
+  } catch (error: any) {
+    console.error('Assets GET error:', error)
+    return NextResponse.json({ 
+      error: '获取资产失败', 
+      details: error.message,
+      code: error.code 
+    }, { status: 500 })
   }
 }
 
@@ -68,7 +73,11 @@ export async function POST(req: NextRequest) {
     })
 
     return NextResponse.json(asset)
-  } catch (error) {
-    return NextResponse.json({ error: '创建资产失败' }, { status: 500 })
+  } catch (error: any) {
+    console.error('Assets POST error:', error)
+    return NextResponse.json({ 
+      error: '创建资产失败', 
+      details: error.message 
+    }, { status: 500 })
   }
 }
