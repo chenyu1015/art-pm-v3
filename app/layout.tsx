@@ -1,6 +1,7 @@
 import './globals.css'
+import '@arco-design/web-react/dist/css/arco.css'
 import type { Metadata } from 'next'
-import { Layout } from '@/app/_components/Layout'
+import { AppLayout } from '@/app/_components/Layout'
 
 export const metadata: Metadata = {
   title: 'Art PM - 游戏美术项目管理',
@@ -15,7 +16,7 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body>
-        <Layout>{children}</Layout>
+        <AppLayout>{children}</AppLayout>
       </body>
     </html>
   )

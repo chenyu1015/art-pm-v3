@@ -1,21 +1,19 @@
 'use client'
 
+import { Card, Button, Table, Tag, Modal, Form, Input, Select, Message, Radio, Grid } from '@arco-design/web-react'
+import { IconPlus } from '@arco-design/web-react/icon'
 import { useEffect, useState } from 'react'
+
+const FormItem = Form.Item
+const { Row, Col } = Grid
 
 export default function TasksPage() {
   const [tasks, setTasks] = useState<any[]>([])
   const [projects, setProjects] = useState<any[]>([])
-  const [view, setView] = useState<'kanban' | 'list'>('kanban')
+  const [view, setView] = useState('kanban')
   const [loading, setLoading] = useState(true)
-  const [showModal, setShowModal] = useState(false)
-  const [formData, setFormData] = useState({
-    title: '',
-    projectId: '',
-    pipelineId: '',
-    assigneeId: '',
-    priority: 'P2',
-    plannedEnd: ''
-  })
+  const [visible, setVisible] = useState(false)
+  const [form] = Form.useForm()
 
   useEffect(() => {
     loadData()
@@ -35,16 +33,17 @@ export default function TasksPage() {
     setLoading(false)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async () => {
+    const values = await form.validate()
     const res = await fetch('/api/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(formData)
+      body: JSON.stringify(values)
     })
     if (res.ok) {
-      setShowModal(false)
-      setFormData({ title: '', projectId: '', pipelineId: '', assigneeId: '', priority: 'P2', plannedEnd: '' })
+      Message.success('任务创建成功')
+      setVisible(false)
+      form.resetFields()
       loadData()
     }
   }
@@ -58,281 +57,171 @@ export default function TasksPage() {
     loadData()
   }
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="text-white/50">加载中...</div>
-    </div>
-  )
-
   const columns = [
-    { key: 'todo', label: '待处理', color: 'from-white/10 to-white/5', borderColor: 'border-white/10' },
-    { key: 'in_progress', label: '进行中', color: 'from-blue-500/20 to-cyan-500/10', borderColor: 'border-blue-500/30' },
-    { key: 'done', label: '已完成', color: 'from-emerald-500/20 to-teal-500/10', borderColor: 'border-emerald-500/30' }
+    { title: '任务', dataIndex: 'title' },
+    { 
+      title: '项目', 
+      dataIndex: 'project',
+      render: (project: any) => project?.name
+    },
+    { 
+      title: '管线', 
+      dataIndex: 'pipeline',
+      render: (pipeline: any) => pipeline && (
+        <Tag color={pipeline.color}>{pipeline.name}</Tag>
+      )
+    },
+    { 
+      title: '负责人', 
+      dataIndex: 'assignee',
+      render: (assignee: any) => assignee?.name || '-'
+    },
+    { 
+      title: '优先级', 
+      dataIndex: 'priority',
+      render: (p: string) => <Tag color={getPriorityColor(p)}>{p}</Tag>
+    },
+    { 
+      title: '状态', 
+      dataIndex: 'status',
+      render: (s: string) => <Tag color={getStatusColor(s)}>{getStatusLabel(s)}</Tag>
+    },
+    { 
+      title: '截止日期', 
+      dataIndex: 'plannedEnd',
+      render: (date: string) => date ? new Date(date).toLocaleDateString() : '-'
+    }
+  ]
+
+  const kanbanColumns = [
+    { key: 'todo', title: '待处理', color: 'gray' },
+    { key: 'in_progress', title: '进行中', color: 'blue' },
+    { key: 'done', title: '已完成', color: 'green' }
   ]
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gradient">任务管理</h1>
-          <p className="text-white/50 mt-1">共 {tasks.length} 个任务</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex bg-white/5 rounded-xl p-1 border border-white/10">
-            <button
-              onClick={() => setView('kanban')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${view === 'kanban' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white'}`}
-            >
-              看板
-            </button>
-            <button
-              onClick={() => setView('list')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${view === 'list' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white'}`}
-            >
-              列表
-            </button>
+    <div className="space-y-4">
+      <Card
+        title="任务管理"
+        extra={
+          <div className="flex gap-3">
+            <Radio.Group value={view} onChange={setView} type="button">
+              <Radio value="kanban">看板</Radio>
+              <Radio value="list">列表</Radio>
+            </Radio.Group>
+            <Button type="primary" icon={<IconPlus />} onClick={() => setVisible(true)}>
+              新建任务
+            </Button>
           </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="btn-gradient px-6 py-3 rounded-xl font-medium"
-          >
-            + 新建任务
-          </button>
-        </div>
-      </div>
-
-      {view === 'kanban' ? (
-        <div className="grid grid-cols-3 gap-5">
-          {columns.map(col => (
-            <div key={col.key} className={`glass-card border ${col.borderColor} bg-gradient-to-b ${col.color}`}>
-              <div className="flex items-center justify-between p-4 border-b border-white/10">
-                <h3 className="font-medium text-white/80">{col.label}</h3>
-                <span className="text-sm text-white/40 bg-white/10 px-2 py-1 rounded-full">
-                  {tasks.filter(t => t.status === col.key).length}
-                </span>
-              </div>
-              <div className="p-3 space-y-3 min-h-[300px]">
-                {tasks.filter(t => t.status === col.key).map((task: any) => (
-                  <div 
-                    key={task.id} 
-                    className="glass-card p-4 hover:border-white/20 transition-all duration-300 group cursor-pointer"
-                  >
-                    <h4 className="font-medium text-white/80 mb-3 group-hover:text-white transition-colors">{task.title}</h4>
-                    <div className="flex items-center gap-2 mb-3">
-                      {task.pipeline && (
-                        <span 
-                          className="text-xs px-2 py-1 rounded-full border"
-                          style={{ 
-                            borderColor: `${task.pipeline.color}40`,
-                            color: task.pipeline.color,
-                            backgroundColor: `${task.pipeline.color}10`
-                          }}
-                        >
-                          {task.pipeline.name}
-                        </span>
-                      )}
-                      <PriorityBadge priority={task.priority} />
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      {task.assignee ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center text-xs text-white">
-                            {task.assignee.name[0]}
-                          </div>
-                          <span className="text-white/40 text-xs">{task.assignee.name}</span>
-                        </div>
-                      ) : (
-                        <span className="text-white/30 text-xs">未指派</span>
-                      )}
-                      {task.plannedEnd && (
-                        <span className="text-xs text-white/30">{new Date(task.plannedEnd).toLocaleDateString()}</span>
-                      )}
-                    </div>
-                    {/* 状态切换 */}
-                    <div className="mt-4 pt-3 border-t border-white/10 flex gap-2">
-                      {col.key !== 'todo' && (
-                        <button 
-                          onClick={() => handleStatusChange(task.id, getPrevStatus(col.key))}
-                          className="text-xs text-white/30 hover:text-white/60 transition-colors"
-                        >
-                          ← 上移
-                        </button>
-                      )}
-                      {col.key !== 'done' && (
-                        <button 
-                          onClick={() => handleStatusChange(task.id, getNextStatus(col.key))}
-                          className="text-xs text-white/30 hover:text-white/60 transition-colors"
-                        >
-                          下移 →
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="glass-card overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-white/5">
-              <tr>
-                <th className="px-5 py-4 text-left text-sm font-medium text-white/50">任务</th>
-                <th className="px-5 py-4 text-left text-sm font-medium text-white/50">项目</th>
-                <th className="px-5 py-4 text-left text-sm font-medium text-white/50">管线</th>
-                <th className="px-5 py-4 text-left text-sm font-medium text-white/50">负责人</th>
-                <th className="px-5 py-4 text-left text-sm font-medium text-white/50">优先级</th>
-                <th className="px-5 py-4 text-left text-sm font-medium text-white/50">状态</th>
-                <th className="px-5 py-4 text-left text-sm font-medium text-white/50">截止日期</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {tasks.map((task: any) => (
-                <tr key={task.id} className="hover:bg-white/5 transition-colors">
-                  <td className="px-5 py-4 font-medium text-white/80">{task.title}</td>
-                  <td className="px-5 py-4 text-sm text-white/40">{task.project?.name}</td>
-                  <td className="px-5 py-4">
-                    {task.pipeline && (
-                      <span 
-                        className="text-xs px-2 py-1 rounded-full border"
-                        style={{ 
-                          borderColor: `${task.pipeline.color}40`,
-                          color: task.pipeline.color,
-                          backgroundColor: `${task.pipeline.color}10`
-                        }}
+        }
+      >
+        {view === 'kanban' ? (
+          <Row gutter={16}>
+            {kanbanColumns.map(col => (
+              <Col span={8} key={col.key}>
+                <Card
+                  title={`${col.title} (${tasks.filter(t => t.status === col.key).length})`}
+                  bodyStyle={{ padding: 12, minHeight: 400, backgroundColor: '#f7f8fa' }}
+                >
+                  <div className="space-y-2">
+                    {tasks.filter(t => t.status === col.key).map((task: any) => (
+                      <Card
+                        key={task.id}
+                        size="small"
+                        bodyStyle={{ padding: 12 }}
+                        hoverable
                       >
-                        {task.pipeline.name}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-5 py-4 text-sm text-white/50">{task.assignee?.name || '-'}</td>
-                  <td className="px-5 py-4"><PriorityBadge priority={task.priority} /></td>
-                  <td className="px-5 py-4"><StatusBadge status={task.status} /></td>
-                  <td className="px-5 py-4 text-sm text-white/40">
-                    {task.plannedEnd ? new Date(task.plannedEnd).toLocaleDateString() : '-'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+                        <div className="font-medium mb-2">{task.title}</div>
+                        <div className="flex gap-2 mb-2">
+                          {task.pipeline && (
+                            <Tag size="small" style={{ backgroundColor: `${task.pipeline.color}20`, color: task.pipeline.color }}>
+                              {task.pipeline.name}
+                            </Tag>
+                          )}
+                          <Tag size="small" color={getPriorityColor(task.priority)}>{task.priority}</Tag>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-gray-500">
+                            {task.assignee?.name || '未指派'}
+                          </span>
+                          <div className="flex gap-1">
+                            {col.key !== 'todo' && (
+                              <Button size="mini" onClick={() => handleStatusChange(task.id, getPrevStatus(col.key))}>
+                                ←
+                              </Button>
+                            )}
+                            {col.key !== 'done' && (
+                              <Button size="mini" onClick={() => handleStatusChange(task.id, getNextStatus(col.key))}>
+                                →
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </Card>
+              </Col>
+            ))}
+          </Row>
+        ) : (
+          <Table columns={columns} data={tasks} loading={loading} rowKey="id" />
+        )}
+      </Card>
 
-      {/* 新建任务弹窗 */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="glass-card p-6 w-96 max-w-[90%]">
-            <h2 className="text-xl font-bold text-gradient mb-6">新建任务</h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm text-white/60 mb-2">任务标题</label>
-                <input
-                  type="text"
-                  value={formData.title}
-                  onChange={e => setFormData({...formData, title: e.target.value})}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-violet-500/50 focus:bg-white/10 transition-all"
-                  placeholder="输入任务标题"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-white/60 mb-2">所属项目</label>
-                <select
-                  value={formData.projectId}
-                  onChange={e => setFormData({...formData, projectId: e.target.value})}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-violet-500/50 focus:bg-white/10 transition-all appearance-none cursor-pointer"
-                  required
-                >
-                  <option value="" className="bg-[#1a1a2e]">选择项目</option>
-                  {projects.map((p: any) => (
-                    <option key={p.id} value={p.id} className="bg-[#1a1a2e]">{p.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm text-white/60 mb-2">优先级</label>
-                <select
-                  value={formData.priority}
-                  onChange={e => setFormData({...formData, priority: e.target.value})}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-violet-500/50 focus:bg-white/10 transition-all appearance-none cursor-pointer"
-                >
-                  <option value="P0" className="bg-[#1a1a2e]">P0 - 紧急</option>
-                  <option value="P1" className="bg-[#1a1a2e]">P1 - 高</option>
-                  <option value="P2" className="bg-[#1a1a2e]">P2 - 中</option>
-                  <option value="P3" className="bg-[#1a1a2e]">P3 - 低</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm text-white/60 mb-2">截止日期</label>
-                <input
-                  type="date"
-                  value={formData.plannedEnd}
-                  onChange={e => setFormData({...formData, plannedEnd: e.target.value})}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-violet-500/50 focus:bg-white/10 transition-all"
-                />
-              </div>
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 px-4 py-3 border border-white/10 rounded-xl text-white/70 hover:bg-white/5 hover:text-white transition-all"
-                >
-                  取消
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 btn-gradient px-4 py-3 rounded-xl"
-                >
-                  创建
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Modal
+        title="新建任务"
+        visible={visible}
+        onOk={handleSubmit}
+        onCancel={() => setVisible(false)}
+        autoFocus={false}
+        focusLock={true}
+      >
+        <Form form={form} layout="vertical">
+          <FormItem label="任务标题" field="title" rules={[{ required: true }]}>
+            <Input placeholder="输入任务标题" />
+          </FormItem>
+          <FormItem label="所属项目" field="projectId" rules={[{ required: true }]}>
+            <Select placeholder="选择项目" options={projects.map(p => ({ label: p.name, value: p.id }))} />
+          </FormItem>
+          <FormItem label="优先级" field="priority" initialValue="P2">
+            <Select options={[
+              { label: 'P0 - 紧急', value: 'P0' },
+              { label: 'P1 - 高', value: 'P1' },
+              { label: 'P2 - 中', value: 'P2' },
+              { label: 'P3 - 低', value: 'P3' }
+            ]} />
+          </FormItem>
+          <FormItem label="截止日期" field="plannedEnd">
+            <Input type="date" />
+          </FormItem>
+        </Form>
+      </Modal>
     </div>
   )
 }
 
-function PriorityBadge({ priority }: { priority: string }) {
-  const colors: Record<string, string> = {
-    P0: 'bg-red-500/20 text-red-400 border-red-500/30',
-    P1: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-    P2: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-    P3: 'bg-white/10 text-white/50 border-white/20'
-  }
-  return (
-    <span className={`text-xs px-2 py-1 rounded-full border ${colors[priority] || colors.P2}`}>
-      {priority}
-    </span>
-  )
+function getPriorityColor(p: string) {
+  const colors: Record<string, string> = { P0: 'red', P1: 'orange', P2: 'blue', P3: 'gray' }
+  return colors[p] || 'blue'
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    todo: 'bg-white/10 text-white/50 border-white/20',
-    in_progress: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-    done: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-  }
-  const labels: Record<string, string> = {
-    todo: '待处理',
-    in_progress: '进行中',
-    done: '已完成'
-  }
-  return (
-    <span className={`text-xs px-2 py-1 rounded-full border ${colors[status] || colors.todo}`}>
-      {labels[status] || status}
-    </span>
-  )
+function getStatusColor(s: string) {
+  const colors: Record<string, string> = { todo: 'gray', in_progress: 'blue', done: 'green' }
+  return colors[s] || 'gray'
 }
 
-function getNextStatus(current: string): string {
+function getStatusLabel(s: string) {
+  const labels: Record<string, string> = { todo: '待处理', in_progress: '进行中', done: '已完成' }
+  return labels[s] || s
+}
+
+function getNextStatus(c: string) {
   const map: Record<string, string> = { todo: 'in_progress', in_progress: 'done' }
-  return map[current] || current
+  return map[c] || c
 }
 
-function getPrevStatus(current: string): string {
+function getPrevStatus(c: string) {
   const map: Record<string, string> = { done: 'in_progress', in_progress: 'todo' }
-  return map[current] || current
+  return map[c] || c
 }
