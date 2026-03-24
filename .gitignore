@@ -36,3 +36,8 @@ next-env.d.ts
 *.db
 *.db-journal
 /prisma/dev.db
+
+# secrets
+.env
+.env.local
+PROJECT.md
