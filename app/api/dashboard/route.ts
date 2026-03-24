@@ -128,7 +128,7 @@ export async function GET(req: NextRequest) {
         type: 'task',
         status: t.status
       }))
-    ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    ].sort((a, b) => new Date(a.date!).getTime() - new Date(b.date!).getTime())
 
     return NextResponse.json({
       stats,
