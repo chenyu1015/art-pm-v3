@@ -1,6 +1,9 @@
 'use client'
 
+import { Card, Table, Tag, Avatar, Space, Typography, Badge } from '@arco-design/web-react'
 import { useEffect, useState } from 'react'
+
+const { Title, Text } = Typography
 
 export default function PersonsPage() {
   const [persons, setPersons] = useState<any[]>([])
@@ -25,78 +28,94 @@ export default function PersonsPage() {
     setLoading(false)
   }
 
-  if (loading) return <div className="text-gray-500">加载中...</div>
+  // 按部门分组统计
+  const deptStats = departments.map(dept => ({
+    ...dept,
+    count: persons.filter(p => p.departmentId === dept.id).length
+  }))
+
+  const columns = [
+    {
+      title: '姓名',
+      dataIndex: 'name',
+      render: (name: string) => (
+        <Space>
+          <Avatar size={32} style={{ backgroundColor: '#165DFF' }}>
+            {name[0]}
+          </Avatar>
+          <span style={{ fontWeight: 500 }}>{name}</span>
+        </Space>
+      )
+    },
+    {
+      title: '部门',
+      dataIndex: 'department',
+      render: (dept: any) => dept?.name || '-'
+    },
+    {
+      title: '技能',
+      dataIndex: 'skills',
+      render: (skills: string[]) => (
+        <Space>
+          {skills?.map(skill => (
+            <Tag key={skill} size="small" color="blue">{skill}</Tag>
+          ))}
+        </Space>
+      )
+    },
+    {
+      title: '职级',
+      dataIndex: 'title',
+      render: (title: string) => title || '-'
+    },
+    {
+      title: '成本系数',
+      dataIndex: 'costFactor',
+      render: (factor: number) => `${factor}x`
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      render: (status: string) => (
+        <Badge 
+          status={status === 'active' ? 'success' : 'default'}
+          text={status === 'active' ? '在职' : '离职'}
+        />
+      )
+    }
+  ]
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-gray-900">人力资源</h1>
-        <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-          + 添加成员
-        </button>
-      </div>
+      <Card>
+        <Title heading={6} style={{ marginBottom: 16 }}>部门概览</Title>
+        <Space wrap>
+          {deptStats.map(dept => (
+            <Card
+              key={dept.id}
+              style={{ width: 140, textAlign: 'center', cursor: 'pointer' }}
+              hoverable
+            >
+              <div style={{ fontSize: 24, fontWeight: 'bold', color: '#165DFF' }}>
+                {dept.count}
+              </div>
+              <div style={{ fontSize: 13, color: '#86909c', marginTop: 4 }}>
+                {dept.name}
+              </div>
+            </Card>
+          ))}
+        </Space>
+      </Card>
 
-      <div className="grid grid-cols-4 gap-4">
-        {persons.map((person: any) => (
-          <div key={person.id} className="bg-white p-5 rounded-lg border border-gray-200">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white text-lg font-medium">
-                  {person.name[0]}
-                </div>
-                <div>
-                  <h3 className="font-medium text-gray-900">{person.name}</h3>
-                  <p className="text-sm text-gray-500">{person.title || '暂无职级'}</p>
-                </div>
-              </div>
-              <span className={`text-xs px-2 py-1 rounded ${
-                person.status === 'active' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'
-              }`}>
-                {person.status === 'active' ? '在职' : '离职'}
-              </span>
-            </div>
-
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-500">部门</span>
-                <span>{person.department?.name || '-'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">邮箱</span>
-                <span className="text-gray-600">{person.email}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">成本系数</span>
-                <span>{person.costFactor}x</span>
-              </div>
-            </div>
-
-            {person.skills?.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <div className="flex flex-wrap gap-2">
-                  {person.skills.map((skill: string) => (
-                    <span key={skill} className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded">
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {person.projectAssignments?.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <p className="text-xs text-gray-500 mb-2">项目分配</p>
-                {person.projectAssignments.map((assignment: any) => (
-                  <div key={assignment.id} className="flex items-center justify-between text-sm mb-1">
-                    <span className="truncate">{assignment.project?.name}</span>
-                    <span className="text-blue-600">{assignment.allocation}%</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+      <Card title={`人员列表 (${persons.length}人)`}>
+        <Table
+          columns={columns}
+          data={persons}
+          loading={loading}
+          rowKey="id"
+          pagination={{ pageSize: 20 }}
+        />
+      </Card>
     </div>
   )
 }
