@@ -1,5 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// Art PM - 完整版 Prisma Schema
+// 一次性交付所有模块
 
 generator client {
   provider = "prisma-client-js"
@@ -10,21 +10,588 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Project {
+// ==================== 系统基础 & RBAC ====================
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  avatar    String?
+  roleId    String
+  role      Role     @relation(fields: [roleId], references: [id])
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 关联
+  assignedTasks       Task[]            @relation("TaskAssignee")
+  createdTasks        Task[]            @relation("TaskCreator")
+  timeEntries         TimeEntry[]
+  ownedProjects       Project[]         @relation("ProjectOwner")
+  pipelineLeads       Pipeline[]        @relation("PipelineLead")
+
+  @@map("users")
+}
+
+model Role {
+  id          String       @id @default(uuid())
+  name        String       @unique
+  label       String
+  description String?
+  permissions String[]     // 权限列表: project:view, task:edit, etc.
+  dataScope   String       @default("project") // global, studio, project, group, personal
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  users User[]
+
+  @@map("roles")
+}
+
+// ==================== 组织架构 ====================
+
+model Studio {
   id          String   @id @default(uuid())
   name        String
   description String?
-  status      String   @default("进行中")
+  status      String   @default("active")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  departments Department[]
+  projects    Project[]
+
+  @@map("studios")
 }
+
+model Department {
+  id        String   @id @default(uuid())
+  studioId  String
+  studio    Studio   @relation(fields: [studioId], references: [id])
+  name      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  persons Person[]
+
+  @@map("departments")
+}
+
+model Person {
+  id            String   @id @default(uuid())
+  departmentId  String?
+  department    Department? @relation(fields: [departmentId], references: [id])
+  name          String
+  email         String   @unique
+  title         String?
+  skills        String[]
+  costFactor    Float    @default(1.0)
+  status        String   @default("active")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  projectAssignments ProjectAssignment[]
+  timeEntries        TimeEntry[]
+
+  @@map("persons")
+}
+
+// ==================== 项目管理 ====================
+
+model Project {
+  id          String   @id @default(uuid())
+  studioId    String?
+  studio      Studio?  @relation(fields: [studioId], references: [id])
+  name        String
+  description String?
+  status      String   @default("planning")
+  stage       String   @default("预研")
+  ownerId     String?
+  owner       User?    @relation("ProjectOwner", fields: [ownerId], references: [id])
+  startDate   DateTime?
+  endDate     DateTime?
+  budget      Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 关联
+  pipelines    Pipeline[]
+  tasks        Task[]
+  milestones   Milestone[]
+  workPackages WorkPackage[]
+  releases     Release[]
+  assignments  ProjectAssignment[]
+  timeEntries  TimeEntry[]
+  assets       Asset[]
+  outsourceOrders OutsourceOrder[]
+  risks        Risk[]
+  costs        Cost[]
+  workflows    Workflow[]
+
+  @@map("projects")
+}
+
+model ProjectAssignment {
+  id            String   @id @default(uuid())
+  projectId     String
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  personId      String
+  person        Person   @relation(fields: [personId], references: [id])
+  allocation    Int      @default(100)
+  role          String?
+  startDate     DateTime?
+  endDate       DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([projectId, personId])
+  @@map("project_assignments")
+}
+
+// ==================== 管线配置 (10条预置) ====================
+
+model Pipeline {
+  id             String   @id @default(uuid())
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name           String
+  code           String
+  sortOrder      Int      @default(0)
+  color          String   @default("#165DFF")
+  icon           String?
+  isActive       Boolean  @default(true)
+  leadId         String?
+  lead           User?    @relation("PipelineLead", fields: [leadId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tasks        Task[]
+  workPackages WorkPackage[]
+  assetStages  AssetStage[]
+
+  @@unique([projectId, code])
+  @@map("pipelines")
+}
+
+// ==================== 任务管理 ====================
+
+model Task {
+  id          String   @id @default(uuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  pipelineId  String?
+  pipeline    Pipeline? @relation(fields: [pipelineId], references: [id])
+  
+  title       String
+  description String?
+  status      String   @default("todo") // todo, in_progress, done, cancelled, blocked
+  priority    String   @default("P2") // P0, P1, P2, P3
+  
+  assigneeId  String?
+  assignee    User?    @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  
+  plannedStart  DateTime?
+  plannedEnd    DateTime?
+  actualStart   DateTime?
+  actualEnd     DateTime?
+  
+  estimatedHours Float?
+  actualHours    Float    @default(0)
+  progress       Int      @default(0)
+  
+  parentId    String?
+  parent      Task?    @relation("TaskParent", fields: [parentId], references: [id])
+  children    Task[]   @relation("TaskParent")
+  
+  milestoneId String?
+  milestone   Milestone? @relation(fields: [milestoneId], references: [id])
+  workPackageId String?
+  workPackage WorkPackage? @relation(fields: [workPackageId], references: [id])
+  assetStageId  String?
+  assetStage    AssetStage? @relation(fields: [assetStageId], references: [id])
+  
+  tags        String[]
+  customFields Json?   @default("{}")
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+  createdBy   User?    @relation("TaskCreator", fields: [createdById], references: [id])
+
+  timeEntries TimeEntry[]
+
+  @@map("tasks")
+}
+
+// ==================== 工时管理 ====================
+
+model TimeEntry {
+  id          String   @id @default(uuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id])
+  taskId      String?
+  task        Task?    @relation(fields: [taskId], references: [id])
+  personId    String
+  person      Person   @relation(fields: [personId], references: [id])
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  
+  hours       Float
+  date        DateTime
+  description String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("time_entries")
+}
+
+// ==================== 规划中心 - 工作包体系 ====================
+
+model WorkPackage {
+  id                  String   @id @default(uuid())
+  projectId           String
+  project             Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  pipelineId          String?
+  pipeline            Pipeline? @relation(fields: [pipelineId], references: [id])
+  releaseId           String?
+  release             Release? @relation(fields: [releaseId], references: [id])
+  
+  title               String
+  description         String?
+  status              String   @default("planning")
+  priority            String   @default("P2")
+  
+  plannedStart        DateTime?
+  plannedEnd          DateTime?
+  actualStart         DateTime?
+  actualEnd           DateTime?
+  
+  standardPersonDays  Float?
+  estimatedCost       Float?
+  actualPersonDays    Float    @default(0)
+  actualCost          Float    @default(0)
+  sourceType          String   @default("internal") // internal, outsource, mixed
+  
+  outsourceVendorId   String?
+  outsourceVendor     OutsourceVendor? @relation(fields: [outsourceVendorId], references: [id])
+  outsourcePrice      Float?
+  
+  quarter             String?  // 2026-Q2
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  tasks Task[]
+  assetStages AssetStage[]
+
+  @@map("work_packages")
+}
+
+model Release {
+  id          String   @id @default(uuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  plannedStart DateTime?
+  plannedEnd   DateTime?
+  status      String   @default("planning")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workPackages WorkPackage[]
+
+  @@map("releases")
+}
+
+// ==================== 里程碑 ====================
+
+model Milestone {
+  id          String   @id @default(uuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  status      String   @default("upcoming") // upcoming, active, completed, delayed
+  plannedDate DateTime
+  actualDate  DateTime?
+  progress    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tasks Task[]
+
+  @@map("milestones")
+}
+
+// ==================== 资产总表 ====================
+
+model Asset {
+  id              String   @id @default(uuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  releaseId       String?
+  name            String
+  assetType       String   // 角色, 场景, 道具, UI界面, 特效, 音频, 过场动画
+  description     String?
+  priority        String   @default("P2")
+  overallStatus   String   @default("not_started") // not_started, in_progress, completed, cancelled
+  overallProgress Int      @default(0)
+  thumbnailUrl    String?
+  tags            String[]
+  customFields    Json?    @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  stages AssetStage[]
+
+  @@map("assets")
+}
+
+model AssetStage {
+  id              String   @id @default(uuid())
+  assetId         String
+  asset           Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  pipelineId      String
+  pipeline        Pipeline @relation(fields: [pipelineId], references: [id])
+  workPackageId   String?
+  workPackage     WorkPackage? @relation(fields: [workPackageId], references: [id])
+  
+  status          String   @default("not_started") // not_started, in_progress, completed, skipped
+  progress        Int      @default(0)
+  assigneeId      String?
+  sourceType      String   @default("internal")
+  
+  plannedStart    DateTime?
+  plannedEnd      DateTime?
+  actualStart     DateTime?
+  actualEnd       DateTime?
+  
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tasks Task[]
+
+  @@map("asset_stages")
+}
+
+// ==================== 外包管理 ====================
+
+model OutsourceVendor {
+  id               String   @id @default(uuid())
+  name             String
+  contactPerson    String?
+  contactInfo      String?
+  specialties      String[]
+  rating           String   @default("B") // A, B, C, D
+  status           String   @default("active") // active, paused, blacklisted
+  totalOrders      Int      @default(0)
+  totalAmount      Float    @default(0)
+  avgOnTimeRate    Float    @default(0)
+  avgReworkRate    Float    @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  orders OutsourceOrder[]
+  workPackages WorkPackage[]
+
+  @@map("outsource_vendors")
+}
+
+model OutsourceOrder {
+  id                String   @id @default(uuid())
+  projectId         String
+  project           Project  @relation(fields: [projectId], references: [id])
+  workPackageId     String?
+  vendorId          String
+  vendor            OutsourceVendor @relation(fields: [vendorId], references: [id])
+  pipelineId        String?
+  
+  title             String
+  assetList         Json?    // 资产清单
+  techSpec          String?
+  standardPersonDays Float?
+  quotedPrice       Float?
+  contractPrice     Float?
+  paymentNodes      Json?    // 付款节点
+  
+  status            String   @default("draft") // draft, sent, in_progress, reviewing, completed, cancelled
+  plannedDelivery   DateTime?
+  actualDelivery    DateTime?
+  reworkCount       Int      @default(0)
+  acceptanceChecklist Json?
+  
+  createdById       String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  payments PaymentRecord[]
+
+  @@map("outsource_orders")
+}
+
+model PaymentRecord {
+  id          String   @id @default(uuid())
+  orderId     String
+  order       OutsourceOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  nodeName    String   // 首付, 中期, 尾款
+  amount      Float
+  status      String   @default("pending") // pending, requested, paid
+  invoiceNo   String?
+  paidDate    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("payment_records")
+}
+
+// ==================== 风险管理 ====================
+
+model Risk {
+  id            String   @id @default(uuid())
+  projectId     String
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  title         String
+  description   String?
+  category      String   // 进度, 成本, 质量, 资源, 技术, 其他
+  probability   Int      @default(3) // 1-5
+  impact        Int      @default(3) // 1-5
+  level         String   @default("medium") // low, medium, high, critical (auto calculated)
+  
+  ownerId       String?
+  strategy      String?  // 应对策略
+  status        String   @default("new") // new, assessing, mitigating, closed, accepted
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("risks")
+}
+
+// ==================== 成本管理 ====================
 
 model Cost {
   id          String   @id @default(uuid())
   projectId   String
-  category    String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  category    String   // 人力, 外包, 工具, 其他
+  subcategory String?
   amount      Float
   description String?
   date        DateTime @default(now())
+  createdById String?
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("costs")
+}
+
+// ==================== 工作流引擎 ====================
+
+model Workflow {
+  id          String   @id @default(uuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  nodes WorkflowNode[]
+  edges WorkflowEdge[]
+  instances WorkflowInstance[]
+
+  @@map("workflows")
+}
+
+model WorkflowNode {
+  id                String   @id @default(uuid())
+  workflowId        String
+  workflow          Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  
+  name              String
+  nodeType          String   // task, parallel_gateway, join_gateway, start, end
+  pipelineId        String?
+  sortOrder         Int      @default(0)
+  estimatedDays     Float?
+  autoCreateTask    Boolean  @default(false)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  outgoingEdges WorkflowEdge[] @relation("FromNode")
+  incomingEdges WorkflowEdge[] @relation("ToNode")
+
+  @@map("workflow_nodes")
+}
+
+model WorkflowEdge {
+  id          String   @id @default(uuid())
+  workflowId  String
+  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  fromNodeId  String
+  fromNode    WorkflowNode @relation("FromNode", fields: [fromNodeId], references: [id])
+  toNodeId    String
+  toNode      WorkflowNode @relation("ToNode", fields: [toNodeId], references: [id])
+  condition   String?  // 流转条件
+  createdAt   DateTime @default(now())
+
+  @@map("workflow_edges")
+}
+
+model WorkflowInstance {
+  id            String   @id @default(uuid())
+  workflowId    String
+  workflow      Workflow @relation(fields: [workflowId], references: [id])
+  workPackageId String?
+  status        String   @default("running") // running, paused, completed
+  currentNodeId String?
+  context       Json?    // 运行上下文
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("workflow_instances")
+}
+
+// ==================== 交付管理 ====================
+
+model Deliverable {
+  id          String   @id @default(uuid())
+  projectId   String
+  milestoneId String?
+  name        String
+  description String?
+  type        String   // 文档, 设计稿, 模型, 动画, 等
+  status      String   @default("pending") // pending, in_progress, reviewing, approved, delivered
+  dueDate     DateTime?
+  completedAt DateTime?
+  assigneeId  String?
+  checkList   Json?    // 检查清单
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("deliverables")
+}
+
+// ==================== 周报/报告 ====================
+
+model WeeklyReport {
+  id          String   @id @default(uuid())
+  projectId   String
+  weekStart   DateTime
+  weekEnd     DateTime
+  content     String?  // 富文本内容
+  summary     String?  // 摘要
+  data        Json?    // 自动生成的统计数据
+  status      String   @default("draft") // draft, sent
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("weekly_reports")
 }
